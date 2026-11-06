@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>노선 스케치 v0.3</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --ink:#16181d; --panel:#1e2128; --panel-2:#272b34; --line:#3a3f4b;
+    --text:#e8eaee; --dim:#9298a5; --accent:#00a84f; --warn:#e8683f; --info:#4a9fd8;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",
+    "Noto Sans KR",sans-serif;background:var(--ink);color:var(--text);display:flex;overflow:hidden}
+  #map{flex:1;height:100vh;background:#2a2d34;cursor:crosshair}
+  .leaflet-container{font-family:inherit}
+  #panel{width:360px;flex:none;height:100vh;background:var(--panel);
+    border-left:1px solid var(--line);display:flex;flex-direction:column}
+
+  .head{padding:14px 16px 11px;border-bottom:1px solid var(--line)}
+  .head h1{margin:0;font-size:14.5px;font-weight:600}
+  .head p{margin:5px 0 0;font-size:11px;color:var(--dim);line-height:1.6}
+
+  .sect{padding:11px 16px;border-bottom:1px solid var(--line)}
+  .sect h3{margin:0 0 8px;font-size:10.5px;color:var(--dim);font-weight:600;letter-spacing:.04em}
+  label.f{display:block;font-size:11px;color:var(--dim);margin:0 0 5px}
+  input[type=text],select{width:100%;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--text);padding:7px 9px;border-radius:5px;font:inherit;font-size:12.5px}
+  input[type=text]:focus,select:focus{outline:none;border-color:var(--accent)}
+  .two{display:flex;gap:8px}.two>*{flex:1;min-width:0}
+
+  .tabs{display:flex;gap:5px;flex-wrap:wrap}
+  .tab{display:flex;align-items:center;gap:6px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:13px;padding:3px 9px 3px 7px;
+    font-size:11.5px;cursor:pointer;color:var(--dim)}
+  .tab[aria-selected=true]{color:var(--text);border-color:var(--dim)}
+  .tab i{width:8px;height:8px;border-radius:50%;flex:none;display:block}
+  .tab .x{color:var(--dim);font-size:12px;line-height:1}
+  .tab .x:hover{color:var(--warn)}
+  .addbtn{background:none;border:1px dashed var(--line);border-radius:13px;
+    padding:3px 10px;font:inherit;font-size:11.5px;color:var(--dim);cursor:pointer}
+  .addbtn:hover{color:var(--text);border-color:var(--dim)}
+
+  .swatches{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .sw{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+  .sw[aria-pressed=true]{border-color:var(--text)}
+  .chk{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dim);
+    margin-top:9px;cursor:pointer}
+  .chk input{margin:0}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1px;background:var(--line)}
+  .stat{background:var(--panel);padding:10px 4px;text-align:center}
+  .stat b{display:block;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+  .stat span{font-size:9.5px;color:var(--dim)}
+
+  #listwrap{flex:1;overflow-y:auto;padding:6px 8px 16px}
+  .empty{color:var(--dim);font-size:12px;line-height:1.75;padding:18px 12px;text-align:center}
+  .st{display:flex;align-items:center;gap:7px;padding:4px 5px;border-radius:5px;cursor:grab}
+  .st:hover{background:var(--panel-2)}
+  .st.drag{opacity:.35}.st.over{box-shadow:inset 0 2px 0 var(--accent)}
+  .st.pass .nm{opacity:.4;text-decoration:line-through}
+  .grip{color:#555b66;font-size:11px;flex:none;letter-spacing:-1px}
+  .idx{width:19px;height:19px;flex:none;border-radius:50%;font-size:9.5px;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600}
+  .st .nm{flex:1;min-width:0;background:transparent;border:none;color:var(--text);
+    font:inherit;font-size:12.5px;padding:2px;border-bottom:1px solid transparent}
+  .st .nm:focus{outline:none;border-bottom-color:var(--line)}
+  .gap{font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums;flex:none}
+  .xf{font-size:9.5px;color:var(--info);flex:none}
+  .del{background:none;border:none;color:#555b66;cursor:pointer;font-size:14px;
+    padding:0 2px;line-height:1;flex:none}
+  .del:hover{color:var(--warn)}
+
+  .btns{padding:9px 14px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}
+  button.act{flex:1;min-width:80px;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--text);padding:7px;border-radius:5px;font:inherit;font-size:12px;cursor:pointer}
+  button.act:hover{border-color:var(--dim)}
+  button.act.primary{background:var(--accent);border-color:var(--accent);color:#08210f;font-weight:600}
+  button.act.info{background:var(--info);border-color:var(--info);color:#06202e;font-weight:600}
+
+  .stn{background:#fff;border-radius:50%;box-shadow:0 0 0 2.5px #16181d,0 1px 3px rgba(0,0,0,.4)}
+  .stn.dim{opacity:.4}
+  .stn.pass{background:#6f7784}
+  .bend{background:#fff;border-radius:2px;transform:rotate(45deg);box-shadow:0 0 0 2px #16181d;cursor:move}
+  .ghost{background:rgba(255,255,255,.5);border-radius:50%;
+    box-shadow:0 0 0 1.5px rgba(22,24,29,.75);opacity:.45;cursor:copy}
+  .ghost:hover{opacity:1;background:#fff}
+  .stn-lbl{background:rgba(22,24,29,.85);color:#fff;font-size:10.5px;padding:2px 5px;
+    border-radius:3px;white-space:nowrap;border:none;box-shadow:none}
+  .stn-lbl::before{display:none}
+  .stn-lbl.dim{opacity:.4}
+
+  .mdl{position:fixed;inset:0;background:rgba(10,11,14,.72);z-index:10000;
+    display:none;align-items:center;justify-content:center}
+  .mdl.on{display:flex}
+  .box{width:540px;max-width:93vw;max-height:82vh;background:var(--panel);
+    border:1px solid var(--line);border-radius:9px;display:flex;flex-direction:column}
+  .box header{padding:14px 16px 11px;border-bottom:1px solid var(--line)}
+  .box header h2{margin:0;font-size:13.5px;font-weight:600}
+  .box header p{margin:5px 0 0;font-size:11px;color:var(--dim);line-height:1.6}
+  .box .body{padding:14px 16px;overflow-y:auto;flex:1}
+  .box footer{padding:10px 16px;border-top:1px solid var(--line);
+    display:flex;justify-content:flex-end;gap:7px}
+  .box footer button{background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:7px 14px;border-radius:5px;font:inherit;font-size:12px;cursor:pointer}
+  .box footer button.primary{background:var(--accent);border-color:var(--accent);
+    color:#08210f;font-weight:600}
+  .searchbar{display:flex;gap:7px;margin-bottom:11px}
+  .searchbar input{flex:1}
+  .searchbar button{background:var(--accent);border:none;color:#08210f;font-weight:600;
+    padding:7px 14px;border-radius:5px;font:inherit;font-size:12px;cursor:pointer}
+  .chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:11px}
+  .chip{background:var(--panel-2);border:1px solid var(--line);color:var(--dim);
+    border-radius:11px;padding:3px 9px;font-size:11px;cursor:pointer}
+  .chip:hover{color:var(--text)}
+  .res{border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .res .r{padding:9px 11px;border-bottom:1px solid var(--line);cursor:pointer;font-size:12px}
+  .res .r:last-child{border-bottom:none}
+  .res .r:hover{background:var(--panel-2)}
+  .res small{display:block;color:var(--dim);font-size:10.5px;margin-top:3px}
+  .msg{color:var(--dim);font-size:12px;line-height:1.7;padding:9px 2px}
+  .msg.err{color:var(--warn)}
+  textarea{width:100%;min-height:104px;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--text);padding:8px 10px;border-radius:5px;font:inherit;font-size:12px;
+    line-height:1.6;resize:vertical}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .xflist{font-size:11.5px;line-height:1.85;color:var(--dim);max-height:220px;overflow-y:auto}
+  .xflist b{color:var(--text);font-weight:500}
+
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:rgba(22,24,29,.94);border:1px solid var(--line);color:var(--text);
+    padding:8px 14px;border-radius:6px;font-size:12px;opacity:0;
+    transition:opacity .18s;pointer-events:none;z-index:9999;max-width:80vw;text-align:center}
+  #toast.on{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="toast"></div>
+
+<aside id="panel">
+  <div class="head">
+    <h1>노선 스케치 <span style="color:var(--dim);font-weight:400">v0.3</span></h1>
+    <p>선로 위에 계통이 올라갑니다. 지도 클릭=역 추가 · 선 클릭=중간 삽입 · 흐린 점=굴절점</p>
+  </div>
+
+  <div class="sect">
+    <h3>선로 (INFRASTRUCTURE)</h3>
+    <div class="tabs" id="trackTabs"></div>
+  </div>
+
+  <div class="sect">
+    <div class="two">
+      <div><label class="f">선로명</label><input type="text" id="tName" autocomplete="off"></div>
+      <div style="flex:0 0 96px"><label class="f">호선 식별</label>
+        <input type="text" id="tRef" autocomplete="off" placeholder="2"></div>
+    </div>
+    <div class="swatches" id="swatches"></div>
+    <label class="chk"><input type="checkbox" id="tLoop">순환선</label>
+  </div>
+
+  <div class="sect">
+    <h3>계통 (SERVICE)</h3>
+    <div class="tabs" id="svcTabs"></div>
+    <div class="two" style="margin-top:9px">
+      <div><label class="f">차종</label>
+        <select id="svcRolling">
+          <option value="heavy">중전철 (80km/h)</option>
+          <option value="heavyG">중전철 지상 (100km/h)</option>
+          <option value="light">경전철 (70km/h)</option>
+          <option value="tram">트램 (50km/h)</option>
+          <option value="express">광역급행 (180km/h)</option>
+        </select></div>
+      <div style="flex:0 0 92px"><label class="f">배차(분)</label>
+        <input type="text" id="svcHeadway" autocomplete="off"></div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="sStn">0</b><span>역</span></div>
+    <div class="stat"><b id="sLen">0.0</b><span>연장km</span></div>
+    <div class="stat"><b id="sStop">0</b><span>정차</span></div>
+    <div class="stat"><b id="sXf">0</b><span>환승</span></div>
+  </div>
+
+  <div id="listwrap">
+    <div class="empty" id="empty">아직 역이 없습니다.<br>지도를 클릭하거나 OSM에서 가져오세요.</div>
+    <div id="list"></div>
+  </div>
+
+  <div class="btns">
+    <button class="act" id="btnUndo">되돌리기</button>
+    <button class="act" id="btnRedo">다시 실행</button>
+    <button class="act" id="btnOsm">OSM 가져오기</button>
+    <button class="act info" id="btnTidy">역 정리 · 환승</button>
+    <button class="act" id="btnOvr">환승 예외</button>
+    <button class="act" id="btnImport">불러오기</button>
+    <button class="act primary" id="btnExport">내보내기</button>
+  </div>
+  <input type="file" id="fileIn" accept=".json,application/json" hidden>
+</aside>
+
+<div id="osmModal" class="mdl">
+  <div class="box">
+    <header><h2>OSM에서 기존 노선 가져오기</h2>
+      <p>역 순서와 선로 곡선을 그대로 불러옵니다. 방향별·지선별로 따로 등록돼 있으니 필요한 만큼 반복하세요.</p></header>
+    <div class="body">
+      <div class="searchbar">
+        <input type="text" id="osmQ" placeholder="예: 2호선, 신분당선" autocomplete="off">
+        <button id="osmGo">검색</button>
+      </div>
+      <div class="chips" id="osmChips"></div>
+      <div id="osmMsg" class="msg"></div>
+      <div class="res" id="osmRes" style="display:none"></div>
+    </div>
+    <footer><button id="osmClose">닫기</button></footer>
+  </div>
+</div>
+
+<div id="ovrModal" class="mdl">
+  <div class="box">
+    <header><h2>환승 예외</h2>
+      <p>자동 생성은 "이름이 같고 호선이 다르면 환승"입니다. 그 규칙이 틀리는 곳만 여기 적습니다.</p></header>
+    <div class="body">
+      <label class="f">강제 연결 — 이름이 달라도 환승되는 곳. 한 줄에 <b>A,B</b></label>
+      <textarea id="ovrForce" spellcheck="false"></textarea>
+      <label class="f" style="margin-top:13px">연결 차단 — 이름이 같아도 환승 안 되는 곳. 한 줄에 역명 하나, 또는 <b>A,B</b></label>
+      <textarea id="ovrBlock" spellcheck="false"></textarea>
+      <div id="xfList" class="xflist" style="margin-top:14px"></div>
+    </div>
+    <footer>
+      <button id="ovrCancel">취소</button>
+      <button id="ovrSave" class="primary">저장하고 다시 정리</button>
+    </footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  var COLORS=["#00a84f","#0052a4","#ef7c1c","#996cac","#bb8336",
+              "#00a5de","#d4003b","#5d6519","#8f8140","#00a99d"];
+  var LS="metro-sketch-v03";
+  var seq=0;
+  function uid(p){ seq++; return p+seq+"_"+Math.random().toString(36).slice(2,6); }
+
+  /* ================= 상태 =================
+     stations : 전역 역 사전. 선로들이 공유한다.
+     tracks   : 선로. 역 순서(stops)와 구간 기하(segs)를 가진다.
+     services : 계통. 어느 선로를 타고 어디에 서는지.
+     transfers: 환승 엣지. 역 정리 때 자동 생성된다.          */
+  var state = blank();
+  function blank(){
+    var t=newTrack("신설 1호선", COLORS[0], "");
+    var s=newService(t.id, "완행", []);
+    return { stations:{}, tracks:[t], services:[s], transfers:[],
+             overrides:defaultOverrides(), active:0, activeSvc:null };
+  }
+  function newTrack(name,color,ref){
+    return {id:uid("T"), name:name, ref:ref||"", color:color, loop:false, stops:[], segs:{}};
+  }
+  function newService(trackId,name,stops){
+    return {id:uid("S"), trackId:trackId, name:name, stops:stops||[],
+            rolling:"heavy", headway:5};
+  }
+  function defaultOverrides(){
+    return {
+      force:[["이수","총신대입구"]],
+      block:[["부전"],["양평"],["신촌"],["광명사거리"]]
+    };
+  }
+
+  function TR(){ return state.tracks[state.active]; }
+  function ST(id){ return state.stations[id]; }
+  function svcOf(track){
+    return state.services.filter(function(s){ return s.trackId===track.id; });
+  }
+  function activeSvc(){
+    if(!state.activeSvc) return null;
+    var f=state.services.filter(function(s){ return s.id===state.activeSvc; });
+    return f.length?f[0]:null;
+  }
+
+  /* ===== 되돌리기 ===== */
+  var past=[],future=[];
+  function snap(){
+    past.push(JSON.stringify(state)); future=[];
+    var b=0;
+    for(var i=past.length-1;i>=0;i--){
+      b+=past[i].length;
+      if(b>12e6 || past.length-i>60){ past=past.slice(i+1); break; }
+    }
+  }
+  function undo(){ if(!past.length) return;
+    future.push(JSON.stringify(state)); state=JSON.parse(past.pop()); rebuild(); toast("되돌렸습니다"); }
+  function redo(){ if(!future.length) return;
+    past.push(JSON.stringify(state)); state=JSON.parse(future.pop()); rebuild(); toast("다시 실행했습니다"); }
+
+  /* ===== 지도 ===== */
+  var map=L.map("map",{zoomControl:true,maxZoom:19}).setView([37.5326,126.9905],12);
+  var E="https://server.arcgisonline.com/ArcGIS/rest/services/",A="Tiles &copy; Esri";
+  function esri(p,n){ return L.tileLayer(E+p+"/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19,maxNativeZoom:n,attribution:A}); }
+  var bases={
+    "어둡게 (기본)":L.layerGroup([esri("Canvas/World_Dark_Gray_Base",16),
+                                 esri("Canvas/World_Dark_Gray_Reference",16)]),
+    "회색":L.layerGroup([esri("Canvas/World_Light_Gray_Base",16),
+                        esri("Canvas/World_Light_Gray_Reference",16)]),
+    "일반 지도":esri("World_Street_Map",17),
+    "위성":esri("World_Imagery",18)
+  };
+  bases["어둡게 (기본)"].addTo(map);
+  L.control.layers(bases,null,{position:"topright"}).addTo(map);
+  var drawLayer=L.layerGroup().addTo(map);
+
+  /* ===== 거리 ===== */
+  function distM(a,b){
+    var R=6371000,t=Math.PI/180;
+    var dLat=(b.lat-a.lat)*t,dLng=(b.lng-a.lng)*t,la1=a.lat*t,la2=b.lat*t;
+    var h=Math.sin(dLat/2)*Math.sin(dLat/2)+
+          Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));
+  }
+
+  /* ===== 구간 기하 =====
+     via 는 역이 아니라 구간에 붙는다. 그래야 역을 선로끼리 공유할 수 있다. */
+  function key(a,b){ return a+"|"+b; }
+  function getVia(t,a,b){
+    var v=t.segs[key(a,b)];
+    if(v) return v;
+    v=t.segs[key(b,a)];
+    if(v) return v.slice().reverse();
+    return [];
+  }
+  function setVia(t,a,b,arr){
+    delete t.segs[key(b,a)];
+    if(arr && arr.length) t.segs[key(a,b)]=arr; else delete t.segs[key(a,b)];
+  }
+  function segCount(t){
+    var n=t.stops.length;
+    if(n<2) return 0;
+    return t.loop ? n : n-1;
+  }
+  function segEnds(t,i){
+    return [t.stops[i], t.stops[(i+1)%t.stops.length]];
+  }
+  function subPath(t,i){
+    var e=segEnds(t,i), a=ST(e[0]), b=ST(e[1]);
+    if(!a||!b) return [];
+    return [a].concat(getVia(t,e[0],e[1]), [b]);
+  }
+  function segLenM(t,i){
+    var p=subPath(t,i),s=0;
+    for(var k=1;k<p.length;k++) s+=distM(p[k-1],p[k]);
+    return s;
+  }
+  function fullPath(t){
+    if(!t.stops.length) return [];
+    var a=ST(t.stops[0]); if(!a) return [];
+    var out=[[a.lat,a.lng]];
+    for(var i=0;i<segCount(t);i++){
+      var p=subPath(t,i);
+      for(var k=1;k<p.length;k++) out.push([p[k].lat,p[k].lng]);
+    }
+    return out;
+  }
+  function trackLen(t){
+    var s=0; for(var i=0;i<segCount(t);i++) s+=segLenM(t,i); return s;
+  }
+
+  /* ===== 역 추가 / 삽입 ===== */
+  map.on("click",function(e){
+    snap();
+    var t=TR();
+    var s={id:uid("n"), name:"역 "+(t.stops.length+1), ref:t.ref,
+           lat:+e.latlng.lat.toFixed(6), lng:+e.latlng.lng.toFixed(6)};
+    state.stations[s.id]=s;
+    t.stops.push(s.id);
+    svcOf(t).forEach(function(sv){ sv.stops.push(s.id); });
+    rebuild();
+  });
+
+  function insertAt(ti, segIdx, latlng){
+    snap();
+    state.active=ti;
+    var t=state.tracks[ti];
+    var prev=t.stops[segIdx-1], next=t.stops[segIdx % t.stops.length];
+    var s={id:uid("n"), name:"새 역", ref:t.ref,
+           lat:+latlng.lat.toFixed(6), lng:+latlng.lng.toFixed(6)};
+    state.stations[s.id]=s;
+
+    /* 기존 구간의 곡선을 새 역 기준으로 둘로 쪼갠다 */
+    var via=getVia(t,prev,next);
+    if(via.length){
+      var best=0,bd=Infinity;
+      for(var k=0;k<via.length;k++){ var d=distM(via[k],s); if(d<bd){bd=d;best=k;} }
+      setVia(t,prev,next,null);
+      setVia(t,prev,s.id,via.slice(0,best));
+      setVia(t,s.id,next,via.slice(best));
+    }
+    t.stops.splice(segIdx,0,s.id);
+    svcOf(t).forEach(function(sv){
+      var p=sv.stops.indexOf(prev);
+      if(p>=0) sv.stops.splice(p+1,0,s.id);
+    });
+    rebuild();
+    toast("역을 삽입했습니다");
+  }
+
+  /* ===== 그리기 ===== */
+  var markers={};
+  function rebuild(){
+    drawLayer.clearLayers(); markers={};
+
+    /* 환승 엣지 */
+    state.transfers.forEach(function(x){
+      var a=ST(x.a),b=ST(x.b); if(!a||!b) return;
+      L.polyline([[a.lat,a.lng],[b.lat,b.lng]],
+        {color:"#4a9fd8",weight:2,opacity:.65,dashArray:"3,5"}).addTo(drawLayer);
+    });
+
+    var sv=activeSvc();
+    state.tracks.forEach(function(t,ti){
+      var on=(ti===state.active);
+      var pts=fullPath(t), pl=null;
+      if(pts.length>1){
+        pl=L.polyline(pts,{color:t.color,weight:on?5:3.5,opacity:on?.95:.35}).addTo(drawLayer);
+        pl.on("click",function(ev){
+          L.DomEvent.stopPropagation(ev);
+          var p=map.latLngToLayerPoint(ev.latlng),best=1,bd=Infinity;
+          for(var i=0;i<segCount(t);i++){
+            var sp=subPath(t,i);
+            for(var k=1;k<sp.length;k++){
+              var x=map.latLngToLayerPoint([sp[k-1].lat,sp[k-1].lng]);
+              var y=map.latLngToLayerPoint([sp[k].lat,sp[k].lng]);
+              var d=L.LineUtil.pointToSegmentDistance(p,x,y);
+              if(d<bd){bd=d;best=i+1;}
+            }
+          }
+          insertAt(ti,best,ev.latlng);
+        });
+      }
+
+      /* 굴절점 — 손으로 그린 구간에서만 (실측 선형은 점이 수백 개라 생략) */
+      if(on){
+        for(var i=0;i<segCount(t);i++){
+          (function(i){
+            var e=segEnds(t,i), via=getVia(t,e[0],e[1]), sp=subPath(t,i);
+            if(sp.length-1>24) return;
+            via.forEach(function(v,j){
+              var bm=L.marker([v.lat,v.lng],{draggable:true,zIndexOffset:600,
+                icon:L.divIcon({className:"bend",iconSize:[9,9],iconAnchor:[4.5,4.5]})}).addTo(drawLayer);
+              bm.on("dragstart",function(){ snap(); });
+              bm.on("drag",function(ev){
+                var ll=ev.target.getLatLng();
+                v.lat=+ll.lat.toFixed(6); v.lng=+ll.lng.toFixed(6);
+                setVia(t,e[0],e[1],via);
+                if(pl) pl.setLatLngs(fullPath(t));
+                renderPanel();
+              });
+              bm.on("dragend",rebuild);
+              function kill(ev){
+                L.DomEvent.stopPropagation(ev);
+                snap(); via.splice(j,1); setVia(t,e[0],e[1],via); rebuild();
+              }
+              bm.on("dblclick",kill); bm.on("contextmenu",kill);
+            });
+            for(var k=1;k<sp.length;k++){
+              (function(k){
+                var mid=L.latLng((sp[k-1].lat+sp[k].lat)/2,(sp[k-1].lng+sp[k].lng)/2);
+                var gm=L.marker(mid,{zIndexOffset:400,
+                  icon:L.divIcon({className:"ghost",iconSize:[9,9],iconAnchor:[4.5,4.5]})}).addTo(drawLayer);
+                gm.on("click",function(ev){
+                  L.DomEvent.stopPropagation(ev);
+                  snap();
+                  via.splice(k-1,0,{lat:+mid.lat.toFixed(6),lng:+mid.lng.toFixed(6)});
+                  setVia(t,e[0],e[1],via); rebuild();
+                });
+              })(k);
+            }
+          })(i);
+        }
+      }
+
+      /* 역 */
+      t.stops.forEach(function(id){
+        var s=ST(id); if(!s) return;
+        var passes = on && sv && sv.stops.indexOf(id)<0;
+        var m=L.marker([s.lat,s.lng],{draggable:on,zIndexOffset:on?1000:0,
+          icon:L.divIcon({className:"stn"+(on?"":" dim")+(passes?" pass":""),
+                          iconSize:[13,13],iconAnchor:[6.5,6.5]})}).addTo(drawLayer);
+        m.bindTooltip(s.name||" ",{permanent:true,direction:"right",offset:[9,0],
+          className:"stn-lbl"+(on?"":" dim")});
+        markers[id]=m;
+        m.on("click",function(ev){
+          L.DomEvent.stopPropagation(ev);
+          if(!on){ state.active=ti; state.activeSvc=null; rebuild(); }
+        });
+        if(on){
+          m.on("dragstart",function(){ snap(); });
+          m.on("drag",function(ev){
+            var ll=ev.target.getLatLng();
+            s.lat=+ll.lat.toFixed(6); s.lng=+ll.lng.toFixed(6);
+            if(pl) pl.setLatLngs(fullPath(t));
+          });
+          m.on("dragend",rebuild);
+        }
+      });
+    });
+    renderPanel(); save();
+  }
+
+  /* ===== 패널 ===== */
+  var elTabs=document.getElementById("trackTabs"), elSvc=document.getElementById("svcTabs"),
+      elList=document.getElementById("list"), elEmpty=document.getElementById("empty"),
+      elName=document.getElementById("tName"), elRef=document.getElementById("tRef"),
+      elSw=document.getElementById("swatches"), elLoop=document.getElementById("tLoop"),
+      elRoll=document.getElementById("svcRolling"), elHead=document.getElementById("svcHeadway");
+
+  function renderPanel(){
+    var t=TR();
+
+    /* 선로 탭 */
+    elTabs.innerHTML="";
+    state.tracks.forEach(function(tk,ti){
+      var d=document.createElement("div");
+      d.className="tab"; d.setAttribute("aria-selected",ti===state.active?"true":"false");
+      var dot=document.createElement("i"); dot.style.background=tk.color;
+      var nm=document.createElement("span");
+      nm.textContent=(tk.name||"이름없음")+" ("+tk.stops.length+")";
+      d.append(dot,nm);
+      d.addEventListener("click",function(){ state.active=ti; state.activeSvc=null; rebuild(); });
+      if(state.tracks.length>1){
+        var x=document.createElement("span"); x.className="x"; x.textContent="×";
+        x.addEventListener("click",function(ev){
+          ev.stopPropagation();
+          if(!confirm("'"+tk.name+"' 선로와 그 계통을 삭제합니다.")) return;
+          snap();
+          state.services=state.services.filter(function(s){return s.trackId!==tk.id;});
+          state.tracks.splice(ti,1);
+          if(state.active>=state.tracks.length) state.active=state.tracks.length-1;
+          state.activeSvc=null; rebuild();
+        });
+        d.appendChild(x);
+      }
+      elTabs.appendChild(d);
+    });
+    var addT=document.createElement("button");
+    addT.className="addbtn"; addT.type="button"; addT.textContent="+ 선로";
+    addT.addEventListener("click",function(){
+      snap();
+      var c=COLORS[state.tracks.length%COLORS.length];
+      var nt=newTrack("선로 "+(state.tracks.length+1),c,"");
+      state.tracks.push(nt);
+      state.services.push(newService(nt.id,"완행",[]));
+      state.active=state.tracks.length-1; state.activeSvc=null; rebuild();
+    });
+    elTabs.appendChild(addT);
+
+    if(document.activeElement!==elName) elName.value=t.name;
+    if(document.activeElement!==elRef) elRef.value=t.ref||"";
+    elLoop.checked=!!t.loop;
+    [].forEach.call(elSw.children,function(b){
+      b.setAttribute("aria-pressed", b.dataset.c===t.color?"true":"false"); });
+
+    /* 계통 탭 */
+    var list=svcOf(t), sv=activeSvc();
+    elSvc.innerHTML="";
+    var all=document.createElement("div");
+    all.className="tab"; all.setAttribute("aria-selected",sv?"false":"true");
+    all.textContent="선로 전체";
+    all.addEventListener("click",function(){ state.activeSvc=null; rebuild(); });
+    elSvc.appendChild(all);
+
+    list.forEach(function(s){
+      var d=document.createElement("div");
+      d.className="tab"; d.setAttribute("aria-selected", sv&&sv.id===s.id?"true":"false");
+      var nm=document.createElement("span");
+      nm.textContent=s.name+" ("+s.stops.length+")";
+      d.appendChild(nm);
+      d.addEventListener("click",function(){ state.activeSvc=s.id; rebuild(); });
+      d.addEventListener("dblclick",function(){
+        var v=prompt("계통 이름",s.name); if(v===null) return;
+        snap(); s.name=v; rebuild();
+      });
+      if(list.length>1){
+        var x=document.createElement("span"); x.className="x"; x.textContent="×";
+        x.addEventListener("click",function(ev){
+          ev.stopPropagation();
+          if(!confirm("계통 '"+s.name+"' 삭제")) return;
+          snap();
+          state.services=state.services.filter(function(q){return q.id!==s.id;});
+          if(state.activeSvc===s.id) state.activeSvc=null;
+          rebuild();
+        });
+        d.appendChild(x);
+      }
+      elSvc.appendChild(d);
+    });
+    var dup=document.createElement("button");
+    dup.className="addbtn"; dup.type="button"; dup.textContent="＋ 계통 복제";
+    dup.addEventListener("click",function(){
+      snap();
+      var base=sv||list[0];
+      var stops=base?base.stops.slice():t.stops.slice();
+      var ns=newService(t.id,"급행",stops);
+      if(base){ ns.rolling=base.rolling; ns.headway=base.headway; }
+      state.services.push(ns); state.activeSvc=ns.id; rebuild();
+      toast("복제했습니다. 통과할 역의 체크를 해제하세요");
+    });
+    elSvc.appendChild(dup);
+
+    if(sv){
+      elRoll.value=sv.rolling; elRoll.disabled=false;
+      if(document.activeElement!==elHead) elHead.value=sv.headway;
+      elHead.disabled=false;
+    }else{
+      var b0=list[0];
+      elRoll.value=b0?b0.rolling:"heavy"; elRoll.disabled=!b0;
+      if(document.activeElement!==elHead) elHead.value=b0?b0.headway:"";
+      elHead.disabled=!b0;
+    }
+
+    /* 통계 */
+    var total=trackLen(t);
+    var xfCount=state.transfers.filter(function(x){
+      return t.stops.indexOf(x.a)>=0 || t.stops.indexOf(x.b)>=0; }).length;
+    document.getElementById("sStn").textContent=t.stops.length;
+    document.getElementById("sLen").textContent=(total/1000).toFixed(1);
+    document.getElementById("sStop").textContent=sv?sv.stops.length:t.stops.length;
+    document.getElementById("sXf").textContent=xfCount;
+
+    /* 역 목록 */
+    var gaps=[]; for(var i=0;i<segCount(t);i++) gaps.push(segLenM(t,i));
+    elEmpty.style.display=t.stops.length?"none":"block";
+    elList.innerHTML="";
+    t.stops.forEach(function(id,i){
+      var s=ST(id); if(!s) return;
+      var row=document.createElement("div");
+      row.className="st"; row.draggable=true; row.dataset.i=i;
+      var stops = !sv || sv.stops.indexOf(id)>=0;
+      if(!stops) row.classList.add("pass");
+
+      var grip=document.createElement("span"); grip.className="grip"; grip.textContent="⋮⋮";
+
+      var idx;
+      if(sv){
+        idx=document.createElement("input");
+        idx.type="checkbox"; idx.checked=stops; idx.style.margin="0 2px";
+        idx.addEventListener("change",function(){
+          snap();
+          if(idx.checked){
+            var pos=0;
+            for(var k=0;k<i;k++) if(sv.stops.indexOf(t.stops[k])>=0) pos++;
+            sv.stops.splice(pos,0,id);
+          }else{
+            sv.stops=sv.stops.filter(function(q){return q!==id;});
+          }
+          rebuild();
+        });
+      }else{
+        idx=document.createElement("div");
+        idx.className="idx"; idx.style.background=t.color; idx.textContent=i+1;
+      }
+
+      var nm=document.createElement("input");
+      nm.type="text"; nm.className="nm"; nm.value=s.name; nm.draggable=false;
+      nm.addEventListener("mousedown",function(){ row.draggable=false; });
+      nm.addEventListener("blur",function(){ row.draggable=true; save(); });
+      nm.addEventListener("input",function(){
+        s.name=nm.value;
+        if(markers[id]&&markers[id].getTooltip()) markers[id].setTooltipContent(nm.value||" ");
+        save();
+      });
+
+      var xf=state.transfers.filter(function(x){return x.a===id||x.b===id;}).length;
+      var xfe=document.createElement("span");
+      xfe.className="xf"; xfe.textContent=xf?("⇄"+xf):"";
+
+      var gap=document.createElement("span");
+      gap.className="gap";
+      gap.textContent = i>0 && gaps[i-1]!=null ? (gaps[i-1]/1000).toFixed(2)+"km" : "";
+      if(t.loop && i===t.stops.length-1 && gaps.length===t.stops.length)
+        gap.textContent += " ↺"+(gaps[gaps.length-1]/1000).toFixed(2);
+
+      var del=document.createElement("button");
+      del.className="del"; del.textContent="×"; del.title="선로에서 역 제거";
+      del.addEventListener("click",function(){
+        snap();
+        t.stops.splice(i,1);
+        svcOf(t).forEach(function(q){ q.stops=q.stops.filter(function(x){return x!==id;}); });
+        var used=state.tracks.some(function(tk){return tk.stops.indexOf(id)>=0;});
+        if(!used){
+          delete state.stations[id];
+          state.transfers=state.transfers.filter(function(x){return x.a!==id&&x.b!==id;});
+        }
+        rebuild();
+      });
+
+      row.append(grip,idx,nm,xfe,gap,del);
+      wireDrag(row,t);
+      elList.appendChild(row);
+    });
+  }
+
+  /* ===== 목록 드래그 정렬 ===== */
+  var dragFrom=null;
+  function wireDrag(row,t){
+    row.addEventListener("dragstart",function(e){
+      dragFrom=+row.dataset.i; row.classList.add("drag");
+      e.dataTransfer.effectAllowed="move";
+      try{ e.dataTransfer.setData("text/plain",String(dragFrom)); }catch(x){}
+    });
+    row.addEventListener("dragend",function(){
+      row.classList.remove("drag");
+      [].forEach.call(elList.children,function(c){c.classList.remove("over");});
+    });
+    row.addEventListener("dragover",function(e){
+      e.preventDefault(); e.dataTransfer.dropEffect="move"; row.classList.add("over"); });
+    row.addEventListener("dragleave",function(){ row.classList.remove("over"); });
+    row.addEventListener("drop",function(e){
+      e.preventDefault(); row.classList.remove("over");
+      var to=+row.dataset.i;
+      if(dragFrom===null||dragFrom===to) return;
+      snap();
+      var moved=t.stops.splice(dragFrom,1)[0];
+      t.stops.splice(to,0,moved);
+      dragFrom=null; rebuild();
+    });
+  }
+
+  /* ===== 필드 ===== */
+  elName.addEventListener("input",function(){ TR().name=elName.value; renderPanel(); save(); });
+  elRef.addEventListener("input",function(){
+    var t=TR(); t.ref=elRef.value;
+    t.stops.forEach(function(id){ if(ST(id)) ST(id).ref=t.ref; });
+    save();
+  });
+  elLoop.addEventListener("change",function(){ snap(); TR().loop=elLoop.checked; rebuild(); });
+  elRoll.addEventListener("change",function(){
+    var sv=activeSvc()||svcOf(TR())[0]; if(!sv) return;
+    snap(); sv.rolling=elRoll.value; save();
+  });
+  elHead.addEventListener("input",function(){
+    var sv=activeSvc()||svcOf(TR())[0]; if(!sv) return;
+    var v=parseFloat(elHead.value); if(!isNaN(v)) sv.headway=v; save();
+  });
+  COLORS.forEach(function(c){
+    var b=document.createElement("button");
+    b.className="sw"; b.type="button"; b.style.background=c; b.dataset.c=c;
+    b.addEventListener("click",function(){ snap(); TR().color=c; rebuild(); });
+    elSw.appendChild(b);
+  });
+
+  /* ===== 역 정리 + 환승 생성 ===== */
+  function blocked(n1,n2){
+    return state.overrides.block.some(function(r){
+      if(r.length===1) return r[0]===n1||r[0]===n2;
+      return (r[0]===n1&&r[1]===n2)||(r[0]===n2&&r[1]===n1);
+    });
+  }
+  function tidy(){
+    snap();
+    /* 1. 같은 호선 + 같은 이름 → 병합 */
+    var groups={}, remap={};
+    Object.keys(state.stations).forEach(function(id){
+      var s=state.stations[id];
+      var k=(s.ref||"?")+"\u0000"+s.name;
+      (groups[k]=groups[k]||[]).push(id);
+    });
+    var merged=0;
+    Object.keys(groups).forEach(function(k){
+      var ids=groups[k];
+      if(ids.length<2) return;
+      var keep=ids[0];
+      ids.slice(1).forEach(function(id){ remap[id]=keep; merged++; });
+    });
+
+    state.tracks.forEach(function(t){
+      var ns={};
+      Object.keys(t.segs).forEach(function(kk){
+        var p=kk.split("|"), a=remap[p[0]]||p[0], b=remap[p[1]]||p[1];
+        if(a!==b) ns[a+"|"+b]=t.segs[kk];
+      });
+      t.segs=ns;
+      var out=[];
+      t.stops.forEach(function(id){
+        var n=remap[id]||id;
+        if(!out.length||out[out.length-1]!==n) out.push(n);
+      });
+      if(t.loop && out.length>1 && out[0]===out[out.length-1]) out.pop();
+      t.stops=out;
+    });
+    state.services.forEach(function(sv){
+      var seen={},out=[];
+      sv.stops.forEach(function(id){
+        var n=remap[id]||id;
+        if(!seen[n]){ seen[n]=1; out.push(n); }
+      });
+      sv.stops=out;
+    });
+    Object.keys(remap).forEach(function(id){ delete state.stations[id]; });
+
+    /* 2. 환승 엣지 생성 */
+    var byName={};
+    Object.keys(state.stations).forEach(function(id){
+      var s=state.stations[id];
+      (byName[s.name]=byName[s.name]||[]).push(id);
+    });
+    var tr=[], seenPair={};
+    function addPair(i,j,note){
+      var a=state.stations[i], b=state.stations[j];
+      if(!a||!b) return;
+      if((a.ref||"")===(b.ref||"")) return;
+      var pk=[i,j].sort().join("|");
+      if(seenPair[pk]) return;
+      seenPair[pk]=1;
+      var d=distM(a,b);
+      tr.push({a:i,b:j,walkM:Math.round(d),
+               walkSec:Math.round(d/1.2)+60, note:note||""});
+    }
+    Object.keys(byName).forEach(function(nm){
+      var ids=byName[nm];
+      for(var i=0;i<ids.length;i++) for(var j=i+1;j<ids.length;j++){
+        var a=state.stations[ids[i]], b=state.stations[ids[j]];
+        if(blocked(a.name,b.name)) continue;
+        if(distM(a,b)>900) continue;
+        addPair(ids[i],ids[j],"");
+      }
+    });
+    /* 강제 연결 */
+    state.overrides.force.forEach(function(r){
+      var A=(byName[r[0]]||[]), B=(byName[r[1]]||[]);
+      A.forEach(function(i){ B.forEach(function(j){ addPair(i,j,"강제"); }); });
+    });
+    state.transfers=tr;
+
+    rebuild();
+    toast("역 "+merged+"개 병합 · 환승 "+tr.length+"개 생성");
+  }
+  document.getElementById("btnTidy").addEventListener("click",tidy);
+
+  /* ===== 환승 예외 모달 ===== */
+  var mOvr=document.getElementById("ovrModal"),
+      taF=document.getElementById("ovrForce"), taB=document.getElementById("ovrBlock");
+  document.getElementById("btnOvr").addEventListener("click",function(){
+    taF.value=state.overrides.force.map(function(r){return r.join(",");}).join("\n");
+    taB.value=state.overrides.block.map(function(r){return r.join(",");}).join("\n");
+    var el=document.getElementById("xfList");
+    if(!state.transfers.length){
+      el.innerHTML="<b>현재 환승 엣지 없음.</b> '역 정리 · 환승'을 먼저 눌러주세요.";
+    }else{
+      el.innerHTML="<b>현재 환승 "+state.transfers.length+"개</b><br>"+
+        state.transfers.slice(0,60).map(function(x){
+          var a=ST(x.a),b=ST(x.b); if(!a||!b) return "";
+          return a.name+" ["+(a.ref||"?")+"] ⇄ "+b.name+" ["+(b.ref||"?")+"] · "+
+                 x.walkM+"m · "+Math.round(x.walkSec/60*10)/10+"분"+(x.note?" ("+x.note+")":"");
+        }).filter(Boolean).join("<br>");
+    }
+    mOvr.classList.add("on");
+  });
+  document.getElementById("ovrCancel").addEventListener("click",function(){ mOvr.classList.remove("on"); });
+  mOvr.addEventListener("click",function(e){ if(e.target===mOvr) mOvr.classList.remove("on"); });
+  document.getElementById("ovrSave").addEventListener("click",function(){
+    function parse(v){
+      return v.split("\n").map(function(l){
+        return l.split(",").map(function(x){return x.trim();}).filter(Boolean);
+      }).filter(function(r){return r.length;});
+    }
+    snap();
+    state.overrides.force=parse(taF.value).filter(function(r){return r.length>=2;});
+    state.overrides.block=parse(taB.value);
+    mOvr.classList.remove("on");
+    tidy();
+  });
+
+  /* ===== 저장 ===== */
+  function save(){ try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
+  function load(){
+    try{
+      var raw=localStorage.getItem(LS); if(!raw) return false;
+      var s=JSON.parse(raw);
+      if(s&&s.tracks&&s.tracks.length&&s.stations){ state=s;
+        if(!state.overrides) state.overrides=defaultOverrides();
+        if(!state.transfers) state.transfers=[];
+        if(!state.services) state.services=[];
+        return true; }
+    }catch(e){}
+    return false;
+  }
+
+  /* ===== 내보내기 / 불러오기 ===== */
+  document.getElementById("btnExport").addEventListener("click",function(){
+    if(!Object.keys(state.stations).length){ alert("먼저 역을 만들어주세요."); return; }
+    var nodes=Object.keys(state.stations).map(function(id){
+      var s=state.stations[id];
+      return {id:s.id,name:s.name,ref:s.ref||"",lat:s.lat,lng:s.lng};
+    });
+    var tracks=state.tracks.map(function(t){
+      var edges=[];
+      for(var i=0;i<segCount(t);i++){
+        var e=segEnds(t,i), sp=subPath(t,i);
+        edges.push({from:e[0],to:e[1],lengthM:Math.round(segLenM(t,i)),
+                    shape:sp.map(function(p){return [p.lat,p.lng];})});
+      }
+      return {id:t.id,name:t.name,ref:t.ref,color:t.color,loop:!!t.loop,
+              stops:t.stops,edges:edges};
+    });
+    var out={schema:"metro-sketch/0.3",created:new Date().toISOString(),
+             stations:nodes, tracks:tracks,
+             services:state.services, transfers:state.transfers,
+             overrides:state.overrides};
+    var blob=new Blob([JSON.stringify(out,null,2)],{type:"application/json"});
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob); a.download="metro-sketch.json"; a.click();
+    URL.revokeObjectURL(a.href); toast("내보냈습니다");
+  });
+
+  var fileIn=document.getElementById("fileIn");
+  document.getElementById("btnImport").addEventListener("click",function(){ fileIn.click(); });
+  fileIn.addEventListener("change",function(){
+    var f=fileIn.files[0]; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var d=JSON.parse(r.result);
+        if(!d.tracks||!d.tracks.length) throw new Error("선로 없음");
+        var st={};
+        (d.stations||d.nodes||[]).forEach(function(n){
+          st[n.id]={id:n.id,name:n.name,ref:n.ref||"",lat:n.lat,lng:n.lng};
+        });
+        var tks=d.tracks.map(function(t){
+          var segs={};
+          (t.edges||[]).forEach(function(e){
+            if(e.shape&&e.shape.length>2)
+              segs[e.from+"|"+e.to]=e.shape.slice(1,-1).map(function(p){
+                return {lat:p[0],lng:p[1]}; });
+          });
+          return {id:t.id,name:t.name,ref:t.ref||"",color:t.color||COLORS[0],
+                  loop:!!t.loop,stops:t.stops||[],segs:segs};
+        });
+        snap();
+        state={stations:st,tracks:tks,
+               services:d.services&&d.services.length?d.services:
+                 tks.map(function(t){return newService(t.id,"완행",t.stops.slice());}),
+               transfers:d.transfers||[], overrides:d.overrides||defaultOverrides(),
+               active:0, activeSvc:null};
+        rebuild(); fit(); toast("불러왔습니다");
+      }catch(e){ alert("읽을 수 없습니다: "+e.message); }
+      fileIn.value="";
+    };
+    r.readAsText(f);
+  });
+
+  function fit(){
+    var all=[];
+    Object.keys(state.stations).forEach(function(id){
+      var s=state.stations[id]; all.push([s.lat,s.lng]);
+    });
+    if(all.length) map.fitBounds(L.latLngBounds(all).pad(.12));
+  }
+
+  /* ===== OSM ===== */
+  var OVERPASS=["https://overpass-api.de/api/interpreter",
+                "https://overpass.kumi.systems/api/interpreter",
+                "https://overpass.osm.ch/api/interpreter"];
+  var PROXY=[function(u){return "https://corsproxy.io/?"+encodeURIComponent(u);},
+             function(u){return "https://api.allorigins.win/raw?url="+encodeURIComponent(u);}];
+
+  function overpass(q){
+    var direct=OVERPASS.slice(), urls=direct.concat(PROXY.map(function(p){return p(OVERPASS[0]);}));
+    var i=0,last=null;
+    function go(){
+      if(i>=urls.length) throw (last||new Error("모든 경로 실패"));
+      return fetch(urls[i],{method:"POST",
+        headers:{"Content-Type":"application/x-www-form-urlencoded"},
+        body:"data="+encodeURIComponent(q)})
+      .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+      .catch(function(err){
+        last=err; i++;
+        if(i===direct.length) msg("직접 연결이 막혀 중계 경로로 재시도 중…");
+        return go();
+      });
+    }
+    return go();
+  }
+
+  var mOsm=document.getElementById("osmModal"), mQ=document.getElementById("osmQ"),
+      mMsg=document.getElementById("osmMsg"), mRes=document.getElementById("osmRes");
+  function msg(t,err){ mMsg.textContent=t; mMsg.className="msg"+(err?" err":""); }
+
+  document.getElementById("btnOsm").addEventListener("click",function(){
+    mOsm.classList.add("on"); mQ.focus();
+    if(!mRes.children.length) msg("노선 이름을 검색하세요.");
+  });
+  document.getElementById("osmClose").addEventListener("click",function(){ mOsm.classList.remove("on"); });
+  mOsm.addEventListener("click",function(e){ if(e.target===mOsm) mOsm.classList.remove("on"); });
+
+  ["2호선","1호선","9호선","신분당선","경의중앙선","우이신설"].forEach(function(t){
+    var c=document.createElement("button");
+    c.className="chip"; c.type="button"; c.textContent=t;
+    c.addEventListener("click",function(){ mQ.value=t; search(); });
+    document.getElementById("osmChips").appendChild(c);
+  });
+
+  function search(){
+    var q=mQ.value.trim();
+    if(!q){ msg("검색어를 입력하세요."); return; }
+    mRes.style.display="none"; mRes.innerHTML="";
+    msg("OpenStreetMap에서 찾는 중…");
+    var esc=q.replace(/["\\]/g,"");
+    var query='[out:json][timeout:45][bbox:33.0,124.5,38.7,131.9];'+
+      'rel["type"="route"]["route"~"^(subway|light_rail|train|tram|monorail)$"]'+
+      '["name"~"'+esc+'"];out tags;';
+    overpass(query).then(function(d){
+      var els=(d.elements||[]).filter(function(e){return e.type==="relation";});
+      if(!els.length){ msg("결과가 없습니다."); return; }
+      msg(els.length+"개를 찾았습니다.");
+      mRes.style.display="block";
+      els.slice(0,40).forEach(function(e){
+        var tg=e.tags||{};
+        var row=document.createElement("div"); row.className="r";
+        var b=document.createElement("b"); b.textContent=tg.name||("relation "+e.id);
+        var s=document.createElement("small");
+        s.textContent=[tg.from&&tg.to?(tg.from+" → "+tg.to):"",tg.operator||"",
+                       tg.ref?("ref "+tg.ref):"", "id "+e.id].filter(Boolean).join(" · ");
+        row.append(b,s);
+        row.addEventListener("click",function(){ loadRel(e.id,tg); });
+        mRes.appendChild(row);
+      });
+    }).catch(function(err){
+      var m=String(err.message||"");
+      msg(/50\d|timeout/i.test(m)
+        ? "서버 혼잡 ("+m+"). 30초 뒤 다시 시도해보세요."
+        : "연결 실패: "+m, true);
+    });
+  }
+  document.getElementById("osmGo").addEventListener("click",search);
+  mQ.addEventListener("keydown",function(e){ if(e.key==="Enter") search(); });
+
+  function stitch(members){
+    var ways=members.filter(function(m){
+      return m.type==="way"&&m.geometry&&(!m.role||m.role===""); });
+    var out=[];
+    ways.forEach(function(w){
+      var g=w.geometry.map(function(p){return {lat:p.lat,lng:p.lon};});
+      if(!out.length){ out=g; return; }
+      var tail=out[out.length-1];
+      if(distM(tail,g[g.length-1])<distM(tail,g[0])) g=g.slice().reverse();
+      out=out.concat(g.slice(1));
+    });
+    return out;
+  }
+  function nearestIdx(path,pt,from){
+    var best=from,bd=Infinity;
+    for(var i=from;i<path.length;i++){
+      var d=distM(path[i],pt); if(d<bd){bd=d;best=i;}
+    }
+    return best;
+  }
+  function guessRef(tags){
+    if(tags.ref) return String(tags.ref);
+    var n=tags.name||"";
+    var m=n.match(/(\d+호선)/); if(m) return m[1];
+    m=n.match(/([가-힣]+선)/); if(m) return m[1];
+    return n.slice(0,6);
+  }
+
+  function loadRel(relId,relTags){
+    msg("선로와 역을 내려받는 중… (20초 정도 걸릴 수 있습니다)");
+    mRes.style.display="none";
+    var query='[out:json][timeout:180];rel('+relId+')->.r;.r out geom;node(r.r); out body;';
+    overpass(query).then(function(d){
+      var rel=null,nt={};
+      (d.elements||[]).forEach(function(e){
+        if(e.type==="relation"&&e.id===relId) rel=e;
+        if(e.type==="node") nt[e.id]=e;
+      });
+      if(!rel||!rel.members) throw new Error("노선 정보를 읽지 못했습니다");
+
+      var path=stitch(rel.members);
+      var roles=["stop","stop_entry_only","stop_exit_only"];
+      var stops=rel.members.filter(function(m){
+        return m.type==="node"&&roles.indexOf(m.role)>=0; });
+      if(!stops.length) stops=rel.members.filter(function(m){
+        return m.type==="node"&&/platform/.test(m.role||""); });
+      if(!stops.length) throw new Error("역 정보가 등록돼 있지 않습니다");
+
+      var ref=guessRef(relTags||{});
+      var raw=[];
+      stops.forEach(function(m){
+        var n=nt[m.ref]; if(!n) return;
+        var nm=((n.tags&&(n.tags.name||n.tags["name:ko"]))||"이름없음").replace(/역$/,"");
+        if(raw.length&&raw[raw.length-1].name===nm) return;
+        raw.push({id:uid("n"),name:nm,ref:ref,
+                  lat:+n.lat.toFixed(6),lng:+n.lon.toFixed(6)});
+      });
+      var isLoop=raw.length>2&&raw[0].name===raw[raw.length-1].name;
+
+      var segs={};
+      if(path.length>2){
+        var cur=0, idxs=raw.map(function(s){ cur=nearestIdx(path,s,cur); return cur; });
+        for(var i=0;i<raw.length-1;i++){
+          var a=idxs[i],b=idxs[i+1];
+          if(b>a+1){
+            var via=path.slice(a+1,b).map(function(p){
+              return {lat:+p.lat.toFixed(6),lng:+p.lng.toFixed(6)}; });
+            var to = (isLoop && i===raw.length-2) ? raw[0].id : raw[i+1].id;
+            segs[raw[i].id+"|"+to]=via;
+          }
+        }
+      }
+      var used = isLoop ? raw.slice(0,raw.length-1) : raw;
+      if(used.length<2) throw new Error("역이 2개 미만입니다");
+      used.forEach(function(s){ state.stations[s.id]=s; });
+
+      var colour=(relTags&&(relTags.colour||relTags.color))||
+                 COLORS[state.tracks.length%COLORS.length];
+      if(!/^#[0-9a-f]{6}$/i.test(colour)) colour=COLORS[state.tracks.length%COLORS.length];
+      var name=(relTags&&relTags.name)||("OSM "+relId);
+
+      snap();
+      var t=newTrack(name,colour,ref);
+      t.loop=isLoop; t.stops=used.map(function(s){return s.id;}); t.segs=segs;
+      var cur0=TR();
+      if(!cur0.stops.length && state.tracks.length===1){
+        state.services=state.services.filter(function(s){return s.trackId!==cur0.id;});
+        state.tracks[0]=t; state.active=0;
+      }else{
+        state.tracks.push(t); state.active=state.tracks.length-1;
+      }
+      state.services.push(newService(t.id,"완행",t.stops.slice()));
+      state.activeSvc=null;
+      rebuild();
+      map.fitBounds(L.latLngBounds(used.map(function(s){return [s.lat,s.lng];})).pad(.1));
+      mOsm.classList.remove("on");
+      toast(name+" — "+used.length+"개 역"+(isLoop?" (순환선)":"")+" 가져왔습니다");
+    }).catch(function(err){
+      msg("가져오기 실패: "+err.message,true);
+      mRes.style.display="block";
+    });
+  }
+
+  /* ===== 기타 ===== */
+  document.getElementById("btnUndo").addEventListener("click",undo);
+  document.getElementById("btnRedo").addEventListener("click",redo);
+  document.addEventListener("keydown",function(e){
+    if(!(e.ctrlKey||e.metaKey)) return;
+    if(e.key==="z"||e.key==="Z"){ e.preventDefault(); e.shiftKey?redo():undo(); }
+    if(e.key==="y"||e.key==="Y"){ e.preventDefault(); redo(); }
+  });
+  var toastEl=document.getElementById("toast"),tt=null;
+  function toast(m){
+    toastEl.textContent=m; toastEl.classList.add("on");
+    clearTimeout(tt); tt=setTimeout(function(){toastEl.classList.remove("on");},2000);
+  }
+
+  if(load()){ rebuild(); fit(); } else { rebuild(); }
+})();
+</script>
+</body>
+</html>
